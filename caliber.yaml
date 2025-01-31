@@ -12,15 +12,16 @@
       shell: "find / -maxdepth 1 -type d -name 'data[0-9]*' 2>/dev/null"
       register: data_dirs
       changed_when: false
-
+      
     - name: Делаем N директорий вида /dataN/test
       shell: |
-        sudo su - hdfs <<< "mkdir -p {{ item }}/test && chmod -R 777 {{ item }}/test"
+        echo "mkdir -p {{ item }}/test && chmod -R 777 {{ item }}/test" | sudo su - hdfs
       loop: "{{ data_dirs.stdout_lines }}"
       when: data_dirs.stdout_lines | length > 0
 
+
     - name: Асинхронно запускаем скрипт
-      shell: "/tmp/script.sh > /tmp/{{ inventory_hostname }}_hdfs_caliber.txt"
+      shell: "/tmp/script.sh > /tmp/script_temptemp && mv /tmp/script_temptemp /tmp/{{ inventory_hostname }}_hdfs_caliber.txt"
       async: 3600
       poll: 0
       args:
