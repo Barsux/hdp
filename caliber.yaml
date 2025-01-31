@@ -1,0 +1,50 @@
+---
+- name: Раскидываем и запускаем скрипт
+  hosts: all
+  tasks:
+    - name: Копируем скрипт на тачки
+      copy:
+        src: ~/script.sh
+        dest: /tmp/script.sh
+        mode: 0755
+
+    - name: Считаем кол-во директорий dataN
+      shell: "find / -maxdepth 1 -type d -name 'data[0-9]*' 2>/dev/null"
+      register: data_dirs
+      changed_when: false
+
+    - name: Делаем N директорий вида /dataN/test
+      shell: |
+        sudo su - hdfs <<< "mkdir -p {{ item }}/test && chmod -R 777 {{ item }}/test"
+      loop: "{{ data_dirs.stdout_lines }}"
+      when: data_dirs.stdout_lines | length > 0
+
+    - name: Асинхронно запускаем скрипт
+      shell: "/tmp/script.sh > /tmp/{{ inventory_hostname }}_hdfs_caliber.txt"
+      async: 3600
+      poll: 0
+      args:
+        executable: /bin/bash
+
+    - name: Асинхронно ждём скрипт
+      wait_for:
+        path: "/tmp/{{ inventory_hostname }}_hdfs_caliber.txt"
+        timeout: 3600
+
+- name: Сборка результатов
+  hosts: all
+  tasks:
+    - name: Собираем результаты по хостам
+      fetch:
+        src: "/tmp/{{ inventory_hostname }}_hdfs_caliber.txt"
+        dest: "/tmp/ansible_results/"
+        flat: yes
+
+- name: Сборка отчёта
+  hosts: localhost
+  tasks:
+    - name: Собираем все результаты в один файл
+      shell: |
+        cat /tmp/ansible_results/*_hdfs_caliber.txt > ~/combined_hdfs_results.txt
+        rm -rf /tmp/ansible_results
+      run_once: true
